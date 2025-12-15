@@ -8,7 +8,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
 
-The app listens on http://0.0.0.0:5006 and stores data under ./data/:
+The app listens on http://0.0.0.0:5050 by default (configurable via APP_PORT)
+and stores data under ./data/:
 - ./data/xml for uploaded CFDI Nómina XMLs
 - ./data/md for generated daily markdown reports
 
@@ -22,9 +23,11 @@ Key endpoints
 - POST /report           -> generate today's report (JSON body optional {"routine": "push"})
 - GET  /report/<date>    -> render markdown report by date (YYYY-MM-DD)
 - GET  /reports          -> list available reports
+- GET  /earnings[/<year>] -> yearly payroll overview (defaults to latest data)
 - GET  /                 -> dashboard view combining budget, CFDI, and routine
 """
 import datetime as dt
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +36,7 @@ from markdown_it import MarkdownIt
 
 from src import budget
 from src.cfdi_parser import parse_all_cfdi, monthly_summary
+from src.earnings import build_yearly_overview
 from src.gym import routine_markdown
 from src.md_report import compose_report
 from src.storage import (
@@ -52,10 +56,30 @@ app = Flask(
 )
 md = MarkdownIt("commonmark")
 ensure_directories()
+app.config["SERVER_HOST"] = os.getenv("APP_HOST", "0.0.0.0")
+try:
+    app.config["SERVER_PORT"] = int(os.getenv("APP_PORT") or os.getenv("PORT") or 5050)
+except ValueError:
+    app.config["SERVER_PORT"] = 5050
+try:
+    app.config["DEFAULT_EARNINGS_YEAR"] = int(os.getenv("EARNINGS_YEAR", "2025"))
+except ValueError:
+    app.config["DEFAULT_EARNINGS_YEAR"] = 2025
 
 
 def _current_budget(cfdi_net: Optional[float] = None):
     return budget.compute_budget_summary(md_text=budget.DEFAULT_BUDGET_MD, cfdi_net=cfdi_net)
+
+
+def _render_earnings(year: int):
+    entries = parse_all_cfdi()
+    monthly = monthly_summary(entries)
+    overview = build_yearly_overview(entries, monthly, year)
+    return render_template(
+        "earnings.html",
+        overview=overview,
+        year=year,
+    )
 
 
 @app.route("/health")
@@ -129,6 +153,17 @@ def reports():
     return jsonify({"reports": files})
 
 
+@app.route("/earnings")
+def earnings_default():
+    year = app.config["DEFAULT_EARNINGS_YEAR"]
+    return _render_earnings(year)
+
+
+@app.route("/earnings/<int:year>")
+def earnings_by_year(year: int):
+    return _render_earnings(year)
+
+
 @app.route("/")
 def dashboard():
     entries = parse_all_cfdi()
@@ -144,8 +179,18 @@ def dashboard():
         monthly=monthly_table,
         routine_html=routine_html,
         entries=entries,
+        server_port=app.config["SERVER_PORT"],
     )
 
 
+def create_app() -> Flask:
+    """Flask application factory."""
+    return app
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5006, debug=True)
+    app.run(
+        host=app.config["SERVER_HOST"],
+        port=app.config["SERVER_PORT"],
+        debug=os.getenv("FLASK_DEBUG", "1") == "1",
+    )

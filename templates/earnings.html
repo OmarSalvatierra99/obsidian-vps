@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>{{ year }} Earnings</h1>
+    <p>Yearly CFDI Nómina overview based on loaded XML_CFDI files.</p>
+  </div>
+  <div class="badge">
+    {{ overview.totals.entries }} payslips · {{ overview.totals.months }} months
+  </div>
+</section>
+
+<div class="year-selector">
+  <span>Years:</span>
+  {% for candidate in overview.available_years %}
+    {% if candidate == year %}
+      <span class="chip active">{{ candidate }}</span>
+    {% else %}
+      <a class="chip" href="{{ url_for('earnings_by_year', year=candidate) }}">{{ candidate }}</a>
+    {% endif %}
+  {% else %}
+    <span class="chip">No data yet</span>
+  {% endfor %}
+</div>
+
+<section class="grid earnings-grid">
+  <div class="card stat-card">
+    <h2>Net</h2>
+    <p class="stat-value">${{ '%.2f'|format(overview.totals.net) }}</p>
+    <p class="stat-hint">Average ${{ '%.2f'|format(overview.totals.avg_net) }}/month</p>
+  </div>
+  <div class="card stat-card">
+    <h2>Gross</h2>
+    <p class="stat-value">${{ '%.2f'|format(overview.totals.gross) }}</p>
+    <p class="stat-hint">Includes {{ overview.totals.months }} months</p>
+  </div>
+  <div class="card stat-card">
+    <h2>Deductions</h2>
+    <p class="stat-value">${{ '%.2f'|format(overview.totals.deductions) }}</p>
+    <p class="stat-hint">ISR ${{ '%.2f'|format(overview.totals.isr) }}</p>
+  </div>
+  <div class="card stat-card">
+    <h2>Otros Pagos</h2>
+    <p class="stat-value">${{ '%.2f'|format(overview.totals.otros) }}</p>
+    <p class="stat-hint">{{ overview.totals.entries }} CFDI entries</p>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Monthly Breakdown</h2>
+    <table class="mono">
+      <tr>
+        <th>Period</th>
+        <th>Gross</th>
+        <th>Deductions</th>
+        <th>Otros</th>
+        <th>Net</th>
+      </tr>
+      {% for row in overview.monthly_rows %}
+      <tr>
+        <td>{{ row.period }}</td>
+        <td>{{ '%.2f'|format(row.gross) }}</td>
+        <td>{{ '%.2f'|format(row.deductions) }}</td>
+        <td>{{ '%.2f'|format(row.otros) }}</td>
+        <td>{{ '%.2f'|format(row.net) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No CFDI files available for {{ year }}.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Cumulative Net</h2>
+    <ul class="progress-list">
+      {% for row in overview.progress %}
+      <li>
+        <span>{{ row.label }}</span>
+        <span>+${{ '%.2f'|format(row.net) }}</span>
+        <strong>${{ '%.2f'|format(row.cumulative_net) }}</strong>
+      </li>
+      {% else %}
+      <li>No monthly data yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% endblock %}
