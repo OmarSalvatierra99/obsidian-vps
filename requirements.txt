@@ -1,0 +1,4 @@
+Flask
+lxml
+markdown-it-py
+pandas

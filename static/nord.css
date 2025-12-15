@@ -1,0 +1,121 @@
+:root {
+  --bg: #2E3440;
+  --bg-2: #3B4252;
+  --bg-3: #434C5E;
+  --border: #4C566A;
+  --text: #D8DEE9;
+  --muted: #81A1C1;
+  --accent: #88C0D0;
+  --accent-2: #B48EAD;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: radial-gradient(circle at 10% 20%, rgba(136, 192, 208, 0.08), transparent 25%), var(--bg);
+  color: var(--text);
+  font-family: 'Fira Code', monospace;
+  margin: 0;
+  padding: 0 1.5rem 2rem;
+}
+
+a { color: var(--muted); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.logo {
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}
+
+.topbar nav a {
+  margin-left: 1rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.topbar nav a:hover {
+  border-color: var(--border);
+  background: var(--bg-2);
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0 0.5rem;
+}
+
+.badge {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.card h2 { margin-top: 0; color: var(--accent); }
+
+.card.wide { grid-column: 1 / -1; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+th {
+  background: var(--bg-2);
+  color: var(--accent);
+  text-align: left;
+}
+
+tr:nth-child(even) td { background: var(--bg-3); }
+
+.mono {
+  font-family: 'Fira Code', monospace;
+}
+
+.markdown h1, .markdown h2, .markdown h3 { color: var(--accent-2); }
+.markdown table { font-family: 'Fira Code', monospace; }
+
+.positive { color: #A3BE8C; }
+.negative { color: #BF616A; }
+
+@media (max-width: 720px) {
+  body { padding: 0 1rem 1.5rem; }
+  .hero { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .grid { grid-template-columns: 1fr; }
+}

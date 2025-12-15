@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Finance & Fitness</h1>
+    <p>Obsidian-flavored dashboard running in dark Nord palette.</p>
+  </div>
+  <div class="badge">Port 5006 · Local</div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Budget Snapshot</h2>
+    <table class="mono">
+      <tr><th>Income</th><td>${{ '%.2f'|format(budget_summary.total_income) }}</td></tr>
+      <tr><th>Expenses</th><td>${{ '%.2f'|format(budget_summary.total_expenses) }}</td></tr>
+      <tr><th>Debts</th><td>${{ '%.2f'|format(budget_summary.active_debts) }}</td></tr>
+      <tr><th>Monthly CFDI Net</th><td>${{ '%.2f'|format(budget_summary.monthly_cfdi_net) }}</td></tr>
+      <tr><th>Effective Balance</th><td class="{{ 'positive' if budget_summary.effective_balance >= 0 else 'negative' }}">${{ '%.2f'|format(budget_summary.effective_balance) }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Monthly CFDI Nómina</h2>
+    <table class="mono">
+      <tr>
+        <th>Period</th>
+        <th>Gross</th>
+        <th>Deductions</th>
+        <th>Net</th>
+        <th>ISR</th>
+      </tr>
+      {% for row in monthly %}
+      <tr>
+        <td>{{ row.period }}</td>
+        <td>{{ '%.2f'|format(row.gross) }}</td>
+        <td>{{ '%.2f'|format(row.deductions) }}</td>
+        <td>{{ '%.2f'|format(row.net) }}</td>
+        <td>{{ '%.2f'|format(row.isr) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No payroll files uploaded yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card wide">
+    <h2>Gym Routine</h2>
+    <div class="markdown" aria-label="gym-routine">
+      {{ routine_html|safe }}
+    </div>
+  </div>
+
+  <div class="card wide">
+    <h2>Recent CFDI Files</h2>
+    <table class="mono">
+      <tr>
+        <th>File</th><th>Fecha</th><th>Emisor</th><th>Receptor</th><th>Net</th>
+      </tr>
+      {% for entry in entries %}
+      <tr>
+        <td>{{ entry.archivo }}</td>
+        <td>{{ entry.fecha or '—' }}</td>
+        <td>{{ entry.emisor }}</td>
+        <td>{{ entry.receptor }}</td>
+        <td>{{ '%.2f'|format(entry.neto) if entry.neto is defined else 'err' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">Upload XMLs via POST /upload-xml</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</section>
+{% endblock %}

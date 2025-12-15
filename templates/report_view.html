@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Report {{ date }}</h1>
+    <p>Source: {{ file_path }}</p>
+  </div>
+  <div class="badge">Markdown → HTML</div>
+</section>
+<article class="markdown">
+  {{ content|safe }}
+</article>
+{% endblock %}
