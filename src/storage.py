@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 XML_DIR = DATA_ROOT / "xml"
 MD_DIR = DATA_ROOT / "md"
+SAMPLE_XML_DIR = Path(__file__).resolve().parent.parent / "xml_cfdi"
 
 
 def ensure_directories() -> None:
@@ -36,9 +37,18 @@ def save_xml_file(file_storage) -> Path:
 
 
 def list_xml_files() -> List[Path]:
-    """Return the available XML files sorted by name."""
+    """Return locally available XML files from uploads and bundled samples."""
     ensure_directories()
-    return sorted(XML_DIR.glob("*.xml"))
+    seen: Dict[str, Path] = {}
+
+    if SAMPLE_XML_DIR.exists():
+        for path in sorted(SAMPLE_XML_DIR.glob("*.xml")):
+            seen.setdefault(path.name, path)
+
+    for path in sorted(XML_DIR.glob("*.xml")):
+        seen[path.name] = path
+
+    return list(seen.values())
 
 
 def write_report(date_slug: str, content: str) -> Path:
