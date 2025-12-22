@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Reports</p>
+    <h1>Report library</h1>
+    <p class="muted">History of generated Markdown reports with quick access and exports.</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="generate-report" type="button">New report</button>
+  </div>
+</header>
+
+<section class="card stack">
+  <div class="card-heading">
+    <div>
+      <p class="overline">Overview</p>
+      <h2>History</h2>
+    </div>
+    <span class="pill">{{ reports|length }} total</span>
+  </div>
+
+  <div class="tab-row">
+    <button class="tab active" type="button">History</button>
+    <button class="tab disabled" type="button" aria-disabled="true">Scheduled</button>
+    <button class="tab disabled" type="button" aria-disabled="true">Overview</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Date</th>
+          <th class="numeric">Size</th>
+          <th>Status</th>
+          <th>Format</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for report in reports %}
+        <tr>
+          <td data-label="Name">{{ report.name }}</td>
+          <td data-label="Date">{{ report.display_date }}</td>
+          <td class="numeric" data-label="Size">{{ report.size_kb }} KB</td>
+          <td data-label="Status"><span class="pill pill-positive">Ready</span></td>
+          <td data-label="Format">Markdown</td>
+          <td class="actions" data-label="Actions">
+            <a class="text-link" href="{{ report.link }}">View</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr class="empty-row">
+          <td colspan="6">No reports yet. Generate a new one to populate this list.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const generateBtn = document.getElementById('generate-report');
+
+  async function createReport() {
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+    try {
+      const response = await fetch('/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routine: 'all' })
+      });
+      if (!response.ok) throw new Error('Failed');
+      const data = await response.json();
+      window.location.href = `/report/${data.date}`;
+    } catch (e) {
+      console.error(e);
+      generateBtn.textContent = 'Retry report';
+    } finally {
+      generateBtn.disabled = false;
+    }
+  }
+
+  if (generateBtn) {
+    generateBtn.addEventListener('click', createReport);
+  }
+</script>
+{% endblock %}

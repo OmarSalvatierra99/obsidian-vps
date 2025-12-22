@@ -1,13 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
+<header class="page-header">
   <div>
-    <h1>Report {{ date }}</h1>
-    <p>Source: {{ file_path }}</p>
+    <p class="eyebrow">Report</p>
+    <h1>{{ date }}</h1>
+    <p class="muted">Markdown source: {{ file_path }}</p>
   </div>
-  <div class="badge">Markdown → HTML</div>
-</section>
-<article class="markdown">
-  {{ content|safe }}
+  <div class="header-actions">
+    <a class="btn btn-ghost" href="{{ url_for('reports') }}">Back to reports</a>
+  </div>
+</header>
+
+<article class="card stack">
+  <div class="card-heading">
+    <div>
+      <p class="overline">Preview</p>
+      <h2>Rendered markdown</h2>
+    </div>
+    <span class="pill">Markdown → HTML</span>
+  </div>
+  <div class="markdown">
+    {{ content|safe }}
+  </div>
 </article>
 {% endblock %}

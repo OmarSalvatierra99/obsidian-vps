@@ -1,89 +1,128 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
+<header class="page-header">
   <div>
+    <p class="eyebrow">Reports</p>
     <h1>{{ year }} Earnings</h1>
-    <p>Yearly CFDI Nómina overview based on loaded XML_CFDI files.</p>
+    <p class="muted">Yearly CFDI Nómina overview based on uploaded XML files.</p>
   </div>
-  <div class="badge">
-    {{ overview.totals.entries }} payslips · {{ overview.totals.months }} months
+  <div class="header-actions">
+    <span class="pill">{{ overview.totals.entries }} payslips · {{ overview.totals.months }} months</span>
   </div>
-</section>
+</header>
 
-<div class="year-selector">
-  <span>Years:</span>
-  {% for candidate in overview.available_years %}
-    {% if candidate == year %}
-      <span class="chip active">{{ candidate }}</span>
+<div class="chip-row">
+  <span class="label">Years</span>
+  <div class="chip-group">
+    {% for candidate in overview.available_years %}
+      {% if candidate == year %}
+        <span class="chip active">{{ candidate }}</span>
+      {% else %}
+        <a class="chip" href="{{ url_for('earnings_by_year', year=candidate) }}">{{ candidate }}</a>
+      {% endif %}
     {% else %}
-      <a class="chip" href="{{ url_for('earnings_by_year', year=candidate) }}">{{ candidate }}</a>
-    {% endif %}
-  {% else %}
-    <span class="chip">No data yet</span>
-  {% endfor %}
+      <span class="chip muted">No data yet</span>
+    {% endfor %}
+  </div>
 </div>
 
-<section class="grid earnings-grid">
-  <div class="card stat-card">
-    <h2>Net</h2>
-    <p class="stat-value">${{ '%.2f'|format(overview.totals.net) }}</p>
-    <p class="stat-hint">Average ${{ '%.2f'|format(overview.totals.avg_net) }}/month</p>
-  </div>
-  <div class="card stat-card">
-    <h2>Gross</h2>
-    <p class="stat-value">${{ '%.2f'|format(overview.totals.gross) }}</p>
-    <p class="stat-hint">Includes {{ overview.totals.months }} months</p>
-  </div>
-  <div class="card stat-card">
-    <h2>Deductions</h2>
-    <p class="stat-value">${{ '%.2f'|format(overview.totals.deductions) }}</p>
-    <p class="stat-hint">ISR ${{ '%.2f'|format(overview.totals.isr) }}</p>
-  </div>
-  <div class="card stat-card">
-    <h2>Otros Pagos</h2>
-    <p class="stat-value">${{ '%.2f'|format(overview.totals.otros) }}</p>
-    <p class="stat-hint">{{ overview.totals.entries }} CFDI entries</p>
-  </div>
-</section>
+<section class="layout-two-column">
+  <div class="column primary">
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Financial summary</h2>
+        <p class="section-meta">Totals and averages from CFDI</p>
+      </div>
+      <div class="card stack">
+        <div class="card-heading">
+          <div>
+            <p class="overline">Totals</p>
+            <h2>Summary</h2>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <div class="metric">
+            <p class="label">Net</p>
+            <p class="value">${{ '%.2f'|format(overview.totals.net) }}</p>
+            <p class="muted small">Avg ${{ '%.2f'|format(overview.totals.avg_net) }}/month</p>
+          </div>
+          <div class="metric">
+            <p class="label">Gross</p>
+            <p class="value">${{ '%.2f'|format(overview.totals.gross) }}</p>
+            <p class="muted small">{{ overview.totals.months }} months</p>
+          </div>
+          <div class="metric">
+            <p class="label">Deductions</p>
+            <p class="value">${{ '%.2f'|format(overview.totals.deductions) }}</p>
+            <p class="muted small">ISR ${{ '%.2f'|format(overview.totals.isr) }}</p>
+          </div>
+          <div class="metric">
+            <p class="label">Otros Pagos</p>
+            <p class="value">${{ '%.2f'|format(overview.totals.otros) }}</p>
+            <p class="muted small">{{ overview.totals.entries }} CFDI entries</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<section class="grid">
-  <div class="card">
-    <h2>Monthly Breakdown</h2>
-    <table class="mono">
-      <tr>
-        <th>Period</th>
-        <th>Gross</th>
-        <th>Deductions</th>
-        <th>Otros</th>
-        <th>Net</th>
-      </tr>
-      {% for row in overview.monthly_rows %}
-      <tr>
-        <td>{{ row.period }}</td>
-        <td>{{ '%.2f'|format(row.gross) }}</td>
-        <td>{{ '%.2f'|format(row.deductions) }}</td>
-        <td>{{ '%.2f'|format(row.otros) }}</td>
-        <td>{{ '%.2f'|format(row.net) }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5">No CFDI files available for {{ year }}.</td></tr>
-      {% endfor %}
-    </table>
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Monthly breakdown</h2>
+        <p class="section-meta">Gross, deductions, otros, net</p>
+      </div>
+      <div class="card stack">
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="numeric">Gross</th>
+                <th class="numeric">Deductions</th>
+                <th class="numeric">Otros</th>
+                <th class="numeric">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in overview.monthly_rows %}
+              <tr>
+                <td data-label="Period">{{ row.period }}</td>
+                <td class="numeric" data-label="Gross">{{ '%.2f'|format(row.gross) }}</td>
+                <td class="numeric" data-label="Deductions">{{ '%.2f'|format(row.deductions) }}</td>
+                <td class="numeric" data-label="Otros">{{ '%.2f'|format(row.otros) }}</td>
+                <td class="numeric" data-label="Net">{{ '%.2f'|format(row.net) }}</td>
+              </tr>
+              {% else %}
+              <tr class="empty-row"><td colspan="5">No CFDI files available for {{ year }}.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Cumulative Net</h2>
-    <ul class="progress-list">
-      {% for row in overview.progress %}
-      <li>
-        <span>{{ row.label }}</span>
-        <span>+${{ '%.2f'|format(row.net) }}</span>
-        <strong>${{ '%.2f'|format(row.cumulative_net) }}</strong>
-      </li>
-      {% else %}
-      <li>No monthly data yet.</li>
-      {% endfor %}
-    </ul>
-  </div>
+  <aside class="column support">
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Progress</h2>
+        <p class="section-meta">Cumulative net over time</p>
+      </div>
+      <div class="card stack">
+        <ul class="progress-list">
+          {% for row in overview.progress %}
+          <li>
+            <div class="progress-row">
+              <span class="label">{{ row.label }}</span>
+              <span class="muted small">+${{ '%.2f'|format(row.net) }}</span>
+            </div>
+            <strong class="value">${{ '%.2f'|format(row.cumulative_net) }}</strong>
+          </li>
+          {% else %}
+          <li class="empty-row">No monthly data yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </aside>
 </section>
 {% endblock %}

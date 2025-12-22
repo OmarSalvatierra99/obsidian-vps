@@ -1,4 +1,2 @@
-Flask
-lxml
-markdown-it-py
-pandas
+Flask>=3.0
+markdown2>=2.4

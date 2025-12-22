@@ -1,3 +1,4 @@
+import calendar
 import datetime as dt
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -145,4 +146,45 @@ def monthly_summary(entries: List[Dict]) -> List[Dict]:
                 "isr": round(agg["isr"], 2),
             }
         )
+    return formatted
+
+
+def biweekly_summary(entries: List[Dict]) -> List[Dict]:
+    """Aggregate CFDI entries by quincena (1-15 and 16-end of month)."""
+    totals = defaultdict(lambda: {"gross": 0.0, "deductions": 0.0, "otros": 0.0, "net": 0.0, "isr": 0.0})
+
+    for item in entries:
+        fecha = item.get("fecha") or ""
+        try:
+            paid = dt.date.fromisoformat(fecha)
+        except (TypeError, ValueError):
+            continue
+        half = 1 if paid.day <= 15 else 2
+        key = (paid.year, paid.month, half)
+        agg = totals[key]
+        agg["gross"] += item.get("total_percepciones", 0.0)
+        agg["deductions"] += item.get("total_deducciones", 0.0)
+        agg["otros"] += item.get("total_otros", 0.0)
+        agg["net"] += item.get("neto", 0.0)
+        agg["isr"] += item.get("isr", 0.0)
+
+    formatted = []
+    for (year, month, half) in sorted(totals.keys()):
+        agg = totals[(year, month, half)]
+        start_day = 1 if half == 1 else 16
+        end_day = 15 if half == 1 else calendar.monthrange(year, month)[1]
+        label = f"{year}-{month:02d} {'1a' if half == 1 else '2a'} quincena"
+        formatted.append(
+            {
+                "period": f"{year}-{month:02d}-Q{half}",
+                "label": label,
+                "range": f"{year}-{month:02d}-{start_day:02d} · {year}-{month:02d}-{end_day:02d}",
+                "gross": round(agg["gross"], 2),
+                "deductions": round(agg["deductions"], 2),
+                "otros": round(agg["otros"], 2),
+                "net": round(agg["net"], 2),
+                "isr": round(agg["isr"], 2),
+            }
+        )
+
     return formatted

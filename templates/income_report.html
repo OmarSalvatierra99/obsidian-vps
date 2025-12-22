@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Ingresos</p>
+    <h1>Reporte quincenal</h1>
+    <p class="muted">Un solo panel con tus CFDI Nómina y totales por quincena.</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="upload-trigger" type="button">Agregar XML</button>
+  </div>
+</header>
+
+<section class="layout-two-column">
+  <div class="column primary">
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Resumen</p>
+          <h2>Panorama rápido</h2>
+        </div>
+        <span class="pill">{{ totals.files }} archivos</span>
+      </div>
+      <div class="kpi-grid">
+        <div class="metric">
+          <p class="label">Neto acumulado</p>
+          <p class="value">${{ '%.2f'|format(totals.net) }}</p>
+          <p class="muted small">Promedio ${{ '%.2f'|format(totals.avg_net) }}/quincena</p>
+        </div>
+        <div class="metric">
+          <p class="label">Bruto acumulado</p>
+          <p class="value">${{ '%.2f'|format(totals.gross) }}</p>
+          <p class="muted small">{{ totals.quincenas }} quincenas</p>
+        </div>
+        <div class="metric">
+          <p class="label">Último pago</p>
+          <p class="value">{{ last_payment or 'Sin fecha' }}</p>
+          <p class="muted small">Actualiza cargando más XML</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Detalle quincenal</p>
+          <h2>Ingresos por quincena</h2>
+        </div>
+        <span class="pill">{{ quincenas|length }} periodos</span>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Quincena</th>
+              <th>Rango</th>
+              <th class="numeric">Bruto</th>
+              <th class="numeric">Deducciones</th>
+              <th class="numeric">Otros</th>
+              <th class="numeric">Neto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in quincenas %}
+            <tr>
+              <td data-label="Quincena">{{ row.label }}</td>
+              <td data-label="Rango">{{ row.range }}</td>
+              <td class="numeric" data-label="Bruto">{{ '%.2f'|format(row.gross) }}</td>
+              <td class="numeric" data-label="Deducciones">{{ '%.2f'|format(row.deductions) }}</td>
+              <td class="numeric" data-label="Otros">{{ '%.2f'|format(row.otros) }}</td>
+              <td class="numeric" data-label="Neto">{{ '%.2f'|format(row.net) }}</td>
+            </tr>
+            {% else %}
+            <tr class="empty-row">
+              <td colspan="6">Cargar tus XML para ver el resumen quincenal.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <aside class="column support">
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Carga</p>
+          <h2>Agregar XML</h2>
+        </div>
+      </div>
+      <p class="muted small">Sube uno o varios CFDI y el reporte se actualiza al instante.</p>
+      <form id="upload-form">
+        <input type="file" id="xml-files" name="files" accept=".xml" multiple hidden>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="upload-start" type="button">Seleccionar XML</button>
+        </div>
+      </form>
+      <p class="helper" id="upload-status">Listo para recibir archivos.</p>
+      <div class="chip-group">
+        {% for name in xml_files %}
+        <span class="chip">{{ name }}</span>
+        {% else %}
+        <span class="chip muted">Sin archivos cargados</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card stack highlight">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Estado</p>
+          <h2>Datos al día</h2>
+        </div>
+      </div>
+      <p class="muted small">Revisa que las fechas en los CFDI sean correctas para que la quincena se calcule bien.</p>
+    </div>
+  </aside>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const fileInput = document.getElementById('xml-files');
+  const uploadButtons = [
+    document.getElementById('upload-start'),
+    document.getElementById('upload-trigger'),
+    document.getElementById('upload-shortcut')
+  ].filter(Boolean);
+  const uploadStatus = document.getElementById('upload-status');
+
+  uploadButtons.forEach(btn => {
+    btn.addEventListener('click', () => fileInput && fileInput.click());
+  });
+
+  async function uploadSelected() {
+    if (!fileInput || fileInput.files.length === 0) {
+      return;
+    }
+    const formData = new FormData();
+    Array.from(fileInput.files).forEach((file) => formData.append('files', file));
+    uploadStatus.textContent = 'Subiendo XML...';
+    try {
+      const response = await fetch('/upload-xml', { method: 'POST', body: formData });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || 'No se pudo subir');
+      }
+      uploadStatus.textContent = `Cargado: ${body.saved.length} archivo(s). Refrescando...`;
+      setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+      console.error(err);
+      uploadStatus.textContent = 'Error al subir XML. Intenta de nuevo.';
+    }
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', uploadSelected);
+  }
+</script>
+{% endblock %}

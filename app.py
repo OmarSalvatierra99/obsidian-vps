@@ -1,196 +1,277 @@
-"""
-Flask-based personal finance and fitness dashboard.
+"""Flask web service for the Markdown-first finance + fitness tracker."""
+from __future__ import annotations
 
-Quickstart
-----------
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-
-The app listens on http://0.0.0.0:5050 by default (configurable via APP_PORT)
-and stores data under ./data/:
-- ./data/xml for uploaded CFDI Nómina XMLs
-- ./data/md for generated daily markdown reports
-
-Key endpoints
--------------
-- GET  /health           -> {"status": "ok"}
-- POST /upload-xml       -> upload CFDI files (field name: files)
-- GET  /cfdi/summary     -> payroll summaries (raw + monthly)
-- GET  /budget           -> budget summary using default markdown
-- GET  /gym-routine      -> markdown routine (?type=push|legs|pull|all)
-- POST /report           -> generate today's report (JSON body optional {"routine": "push"})
-- GET  /report/<date>    -> render markdown report by date (YYYY-MM-DD)
-- GET  /reports          -> list available reports
-- GET  /earnings[/<year>] -> yearly payroll overview (defaults to latest data)
-- GET  /                 -> dashboard view combining budget, CFDI, and routine
-"""
 import datetime as dt
+import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Iterable, List
 
-from flask import Flask, jsonify, render_template, request
-from markdown_it import MarkdownIt
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, url_for
+from markupsafe import Markup
+from werkzeug.utils import secure_filename
+import markdown2
 
-from src import budget
-from src.cfdi_parser import parse_all_cfdi, monthly_summary
-from src.earnings import build_yearly_overview
-from src.gym import routine_markdown
-from src.md_report import compose_report
-from src.storage import (
-    ensure_directories,
-    list_reports,
-    read_report,
-    save_xml_file,
-    write_report,
-)
+import config
+from scripts import budget, cfdi_parser, earnings, gym, md_report, storage, utils
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-app = Flask(
-    __name__,
-    template_folder=str(PROJECT_ROOT / "templates"),
-    static_folder=str(PROJECT_ROOT / "static"),
-)
-md = MarkdownIt("commonmark")
-ensure_directories()
-app.config["SERVER_HOST"] = os.getenv("APP_HOST", "0.0.0.0")
-try:
-    app.config["SERVER_PORT"] = int(os.getenv("APP_PORT") or os.getenv("PORT") or 5050)
-except ValueError:
-    app.config["SERVER_PORT"] = 5050
-try:
-    app.config["DEFAULT_EARNINGS_YEAR"] = int(os.getenv("EARNINGS_YEAR", "2025"))
-except ValueError:
-    app.config["DEFAULT_EARNINGS_YEAR"] = 2025
+def setup_logging() -> None:
+    """Configure logging to file + stdout for web context."""
+    config.ensure_directories()
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    handlers = [
+        logging.FileHandler(config.LOG_FILE),
+        logging.StreamHandler(),
+    ]
+    logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
+    for handler in logging.getLogger().handlers:
+        handler.setFormatter(formatter)
 
 
-def _current_budget(cfdi_net: Optional[float] = None):
-    return budget.compute_budget_summary(md_text=budget.DEFAULT_BUDGET_MD, cfdi_net=cfdi_net)
+app = Flask(__name__)
+app.secret_key = os.getenv("APP_SECRET_KEY", "dev-secret")
+markdown = markdown2.Markdown(extras=["tables", "fenced-code-blocks", "strike"])
+
+config.ensure_directories()
+storage.ensure_directories()
+setup_logging()
 
 
-def _render_earnings(year: int):
-    entries = parse_all_cfdi()
-    monthly = monthly_summary(entries)
-    overview = build_yearly_overview(entries, monthly, year)
-    return render_template(
-        "earnings.html",
-        overview=overview,
-        year=year,
-    )
+def _render_markdown(md_text: str) -> str:
+    """Convert Markdown to HTML for safe template rendering."""
+    return markdown.convert(md_text or "")
 
 
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok"})
+def _latest_report_slug() -> str | None:
+    reports = storage.list_reports()
+    return reports[0].stem if reports else None
 
 
-@app.route("/upload-xml", methods=["POST"])
-def upload_xml():
-    if "files" not in request.files:
-        return jsonify({"error": "No files provided. Use form field 'files'."}), 400
-    saved = []
-    for file in request.files.getlist("files"):
-        path = save_xml_file(file)
-        saved.append(path.name)
-    entries = parse_all_cfdi()
-    return jsonify({"saved": saved, "parsed": entries})
-
-
-@app.route("/cfdi/summary")
-def cfdi_summary():
-    entries = parse_all_cfdi()
-    monthly = monthly_summary(entries)
-    return jsonify({"entries": entries, "monthly": monthly})
-
-
-@app.route("/budget")
-def budget_route():
-    entries = parse_all_cfdi()
-    monthly = monthly_summary(entries)
+def _budget_summary_from_cfdi(monthly: List[Dict]) -> Dict[str, float]:
     latest_net = monthly[-1]["net"] if monthly else 0.0
-    summary = _current_budget(cfdi_net=latest_net)
-    return jsonify(summary)
+    return budget.compute_budget_summary(cfdi_net=latest_net)
 
 
-@app.route("/gym-routine")
-def gym_routine():
-    routine_type = request.args.get("type", "all")
-    md_text = routine_markdown(routine_type)
-    return jsonify({"type": routine_type, "markdown": md_text})
+def _save_uploaded_files(files: Iterable, target_dir: Path) -> List[str]:
+    saved: List[str] = []
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for file_storage in files:
+        if not getattr(file_storage, "filename", ""):
+            continue
+        filename = secure_filename(file_storage.filename)
+        dest = target_dir / filename
+        file_storage.save(dest)
+        saved.append(filename)
+    return saved
 
 
-@app.route("/report", methods=["POST"])
-def generate_report():
-    routine_type = request.json.get("routine") if request.is_json else None
-    routine_type = routine_type or "push"
-    today = dt.date.today().isoformat()
-    entries = parse_all_cfdi()
-    monthly = monthly_summary(entries)
-    latest_net = monthly[-1]["net"] if monthly else 0.0
-    budget_summary = _current_budget(cfdi_net=latest_net)
-    routine_md = routine_markdown(routine_type)
-    report_md = compose_report(today, budget_summary, monthly, routine_type.upper(), routine_md)
-    path = write_report(today, report_md)
-    return jsonify({"date": today, "path": str(path), "markdown": report_md})
+@app.context_processor
+def inject_globals() -> Dict[str, str]:
+    return {
+        "environment_label": os.getenv("APP_ENV", "local"),
+        "server_port": os.getenv("PORT", "5000"),
+    }
 
 
-@app.route("/report/<date_slug>")
-def report_view(date_slug: str):
-    try:
-        report_md, path = read_report(date_slug)
-    except FileNotFoundError:
-        return jsonify({"error": f"Report {date_slug} not found"}), 404
-    html = md.render(report_md)
-    return render_template("report_view.html", content=html, date=date_slug, file_path=str(path))
-
-
-@app.route("/reports")
-def reports():
-    files = [p.name for p in list_reports()]
-    return jsonify({"reports": files})
-
-
-@app.route("/earnings")
-def earnings_default():
-    year = app.config["DEFAULT_EARNINGS_YEAR"]
-    return _render_earnings(year)
-
-
-@app.route("/earnings/<int:year>")
-def earnings_by_year(year: int):
-    return _render_earnings(year)
-
-
-@app.route("/")
+@app.get("/")
 def dashboard():
-    entries = parse_all_cfdi()
-    monthly = monthly_summary(entries)
-    latest_net = monthly[-1]["net"] if monthly else 0.0
-    budget_summary = _current_budget(cfdi_net=latest_net)
-    routine_md = routine_markdown("all")
-    routine_html = md.render(routine_md)
-    monthly_table = monthly
+    entries = cfdi_parser.parse_all_cfdi()
+    monthly = cfdi_parser.monthly_summary(entries)
+    budget_summary = _budget_summary_from_cfdi(monthly)
+    routine_html = Markup(_render_markdown(gym.routine_markdown("all")))
+    today = dt.date.today().isoformat()
     return render_template(
         "dashboard.html",
-        budget_summary=budget_summary,
-        monthly=monthly_table,
-        routine_html=routine_html,
         entries=entries,
-        server_port=app.config["SERVER_PORT"],
+        monthly=monthly,
+        budget_summary=budget_summary,
+        routine_html=routine_html,
+        latest_report=_latest_report_slug(),
+        today=today,
+        status=request.args.get("status"),
+        message=request.args.get("message"),
     )
 
 
-def create_app() -> Flask:
-    """Flask application factory."""
-    return app
+@app.get("/reports")
+def reports():
+    report_paths = storage.list_reports()
+    reports_view = [
+        {
+            "name": path.stem,
+            "display_date": path.stem,
+            "size_kb": round(path.stat().st_size / 1024, 1),
+            "link": url_for("report_view", date_slug=path.stem),
+        }
+        for path in report_paths
+    ]
+    return render_template("reports.html", reports=reports_view)
+
+
+@app.get("/report/<date_slug>")
+def report_view(date_slug: str):
+    try:
+        md_content, path = storage.read_report(date_slug)
+    except FileNotFoundError:
+        abort(404)
+    html = Markup(_render_markdown(md_content))
+    return render_template("report_view.html", date=date_slug, file_path=path, content=html)
+
+
+@app.get("/report/<date_slug>/download")
+def download_report(date_slug: str):
+    try:
+        _, path = storage.read_report(date_slug)
+    except FileNotFoundError:
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=f"{date_slug}.md")
+
+
+@app.post("/report")
+def generate_report():
+    payload = request.get_json(silent=True) or {}
+    date_slug = payload.get("date") or dt.date.today().isoformat()
+    routine = (payload.get("routine") or "all").lower()
+    routine_label = routine.title() if routine in ("push", "pull", "legs") else "All"
+
+    cfdi_entries = cfdi_parser.parse_all_cfdi()
+    monthly = cfdi_parser.monthly_summary(cfdi_entries)
+    budget_summary = _budget_summary_from_cfdi(monthly)
+
+    report_md = md_report.compose_report(
+        date_slug,
+        budget_summary=budget_summary,
+        cfdi_monthly=monthly,
+        routine_title=routine_label,
+        routine_md=gym.routine_markdown(routine if routine in ("push", "pull", "legs") else "all"),
+    )
+    path = storage.write_report(date_slug, report_md)
+    logging.info("Report %s written to %s", date_slug, path)
+    return jsonify({"date": date_slug, "link": url_for("report_view", date_slug=date_slug)})
+
+
+@app.post("/upload-xml")
+def upload_xml():
+    files = request.files.getlist("files")
+    if not files:
+        return jsonify({"error": "No XML files provided"}), 400
+    saved = _save_uploaded_files(files, config.CFDI_INBOX)
+
+    existing = utils.collect_existing_uuids(config.LEDGER_DIR)
+    new_entries = utils.ingest_cfdi_files(config.CFDI_INBOX, config.DEFAULT_CURRENCY, existing)
+    written = utils.append_entries(new_entries) if new_entries else {}
+
+    return jsonify(
+        {
+            "saved": saved,
+            "ingested": len(new_entries),
+            "ledgers": [str(path) for path in written.values()],
+        }
+    )
+
+
+def _safe_float(raw: str | None, default: float = 0.0) -> float:
+    try:
+        return float(raw) if raw not in (None, "") else default
+    except ValueError:
+        return default
+
+
+@app.post("/entries")
+def create_entry():
+    data = request.get_json(silent=True) or request.form
+    entry = utils.manual_entry(
+        date_str=data.get("date") or None,
+        entry_type=data.get("type", "expense"),
+        category=data.get("category", "general"),
+        description=data.get("description", "").strip() or "entry",
+        amount=_safe_float(data.get("amount"), 0.0),
+        currency=data.get("currency") or config.DEFAULT_CURRENCY,
+        source="web",
+        uuid=None,
+    )
+    utils.append_entries([entry])
+    logging.info("Recorded web entry %s", entry.uuid)
+    if request.is_json:
+        return jsonify({"status": "ok", "uuid": entry.uuid})
+    return redirect(url_for("dashboard", status="ok", message="Entry saved"))
+
+
+@app.post("/workouts")
+def log_workout():
+    data = request.get_json(silent=True) or request.form
+    date = utils.iso_date(data.get("date"))
+    day = (data.get("day") or "PUSH").upper()
+    raw_sets = data.get("sets") or ""
+
+    if isinstance(raw_sets, str):
+        set_lines = [line.strip() for line in raw_sets.splitlines() if line.strip()]
+    elif isinstance(raw_sets, list):
+        set_lines = [str(item).strip() for item in raw_sets if str(item).strip()]
+    else:
+        set_lines = []
+
+    if not set_lines:
+        return jsonify({"error": "No sets provided"}), 400
+
+    sets = [utils.parse_set_str(raw, date, day) for raw in set_lines]
+    path = utils.append_workout(date, day, sets)
+    logging.info("Logged %s sets for %s", len(sets), date)
+    if request.is_json:
+        return jsonify({"status": "ok", "path": str(path)})
+    return redirect(url_for("dashboard", status="ok", message="Workout saved"))
+
+
+@app.get("/earnings")
+def earnings_default():
+    entries = cfdi_parser.parse_all_cfdi()
+    monthly = cfdi_parser.monthly_summary(entries)
+    year = dt.date.today().year
+    overview = earnings.build_yearly_overview(entries, monthly, year)
+    return render_template("earnings.html", year=year, overview=overview)
+
+
+@app.get("/earnings/<int:year>")
+def earnings_by_year(year: int):
+    entries = cfdi_parser.parse_all_cfdi()
+    monthly = cfdi_parser.monthly_summary(entries)
+    overview = earnings.build_yearly_overview(entries, monthly, year)
+    return render_template("earnings.html", year=year, overview=overview)
+
+
+@app.get("/income")
+def income_report():
+    entries = cfdi_parser.parse_all_cfdi()
+    totals = {
+        "files": len(entries),
+        "net": round(sum(item.get("neto", 0.0) for item in entries), 2),
+        "gross": round(sum(item.get("total_percepciones", 0.0) for item in entries), 2),
+        "avg_net": round(sum(item.get("neto", 0.0) for item in entries) / len(entries), 2) if entries else 0.0,
+        "quincenas": len(entries),
+    }
+    monthly = cfdi_parser.monthly_summary(entries)
+    last_payment = monthly[-1]["period"] if monthly else ""
+    quincenas = cfdi_parser.biweekly_summary(entries)
+    xml_files = [path.name for path in storage.list_xml_files()] if hasattr(storage, "list_xml_files") else []
+    return render_template(
+        "income_report.html",
+        totals=totals,
+        quincenas=quincenas,
+        last_payment=last_payment,
+        xml_files=xml_files,
+    )
+
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok", "now": dt.datetime.utcnow().isoformat()})
+
+
+def main() -> None:
+    port = int(os.getenv("PORT", "5005"))
+    app.run(host="0.0.0.0", port=port, debug=os.getenv("FLASK_DEBUG") == "1")
 
 
 if __name__ == "__main__":
-    app.run(
-        host=app.config["SERVER_HOST"],
-        port=app.config["SERVER_PORT"],
-        debug=os.getenv("FLASK_DEBUG", "1") == "1",
-    )
+    main()

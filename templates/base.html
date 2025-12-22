@@ -1,23 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='nord.css') }}">
-  <title>Obsidian Finance & Fitness</title>
+  <title>Ingresos XML</title>
 </head>
 <body>
-  <header class="topbar">
-    <div class="logo">Obsidian · Nord</div>
-    <nav>
-      <a href="{{ url_for('dashboard') }}">Dashboard</a>
-      <a href="{{ url_for('earnings_default') }}">Earnings</a>
-      <a href="{{ url_for('reports') }}">Reports</a>
-      <a href="{{ url_for('health') }}">Health</a>
-    </nav>
-  </header>
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar__left">
+        <div class="logo">Ingresos XML</div>
+        <div class="env-pill">{{ environment_label }} · Port {{ server_port }}</div>
+      </div>
+      <div class="topbar__right">
+        <button class="btn btn-primary sm" type="button" id="upload-shortcut">Agregar XML</button>
+        <a class="text-link" href="{{ url_for('health') }}">Salud del sistema</a>
+      </div>
+    </header>
+
+    <div class="shell-body">
+      <aside class="nav-rail" aria-label="Navegación principal">
+        <nav>
+          <div class="nav-section">
+            <p class="nav-label">Principal</p>
+            <a class="nav-link {% if request.endpoint in ('dashboard', 'income_report') %}active{% endif %}" href="{{ url_for('dashboard') }}">Reporte</a>
+            <a class="nav-link {% if request.endpoint in ('reports','report_view') %}active{% endif %}" href="{{ url_for('reports') }}">Reportes MD</a>
+          </div>
+          <div class="nav-section">
+            <p class="nav-label">Datos</p>
+            <a class="nav-link {% if request.endpoint in ('earnings_default', 'earnings_by_year') %}active{% endif %}" href="{{ url_for('earnings_default') }}">Histórico</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="page">
+        <div class="page-inner">
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+
+    <footer class="footer">
+      <div class="footer__meta">
+        <span class="dot"></span>
+        <span>Sistema listo</span>
+        <span>· Última sync: ahora</span>
+      </div>
+      <a class="text-link" href="mailto:support@example.com">Soporte</a>
+    </footer>
+  </div>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

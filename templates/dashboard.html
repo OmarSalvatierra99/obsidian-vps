@@ -1,74 +1,335 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
+<header class="page-header">
   <div>
+    <p class="eyebrow">Dashboard</p>
     <h1>Finance & Fitness</h1>
-    <p>Obsidian-flavored dashboard running in dark Nord palette.</p>
+    <p class="muted">Operational snapshot combining budget, CFDI payroll, and routine readiness.</p>
+    {% if status %}
+    <div class="inline-alert success">
+      <span class="dot"></span>
+      <div>
+        <strong>{{ message or 'Saved' }}</strong>
+        <p class="muted small">Updated via web.</p>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  <div class="badge">Port {{ server_port }} · Local</div>
-</section>
-
-<section class="grid">
-  <div class="card">
-    <h2>Budget Snapshot</h2>
-    <table class="mono">
-      <tr><th>Income</th><td>${{ '%.2f'|format(budget_summary.total_income) }}</td></tr>
-      <tr><th>Expenses</th><td>${{ '%.2f'|format(budget_summary.total_expenses) }}</td></tr>
-      <tr><th>Debts</th><td>${{ '%.2f'|format(budget_summary.active_debts) }}</td></tr>
-      <tr><th>Monthly CFDI Net</th><td>${{ '%.2f'|format(budget_summary.monthly_cfdi_net) }}</td></tr>
-      <tr><th>Effective Balance</th><td class="{{ 'positive' if budget_summary.effective_balance >= 0 else 'negative' }}">${{ '%.2f'|format(budget_summary.effective_balance) }}</td></tr>
-    </table>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="new-report-btn" type="button">New report</button>
+    <a class="btn btn-ghost" href="{{ url_for('reports') }}">Reports</a>
   </div>
+</header>
 
-  <div class="card">
-    <h2>Monthly CFDI Nómina</h2>
-    <table class="mono">
-      <tr>
-        <th>Period</th>
-        <th>Gross</th>
-        <th>Deductions</th>
-        <th>Net</th>
-        <th>ISR</th>
-      </tr>
-      {% for row in monthly %}
-      <tr>
-        <td>{{ row.period }}</td>
-        <td>{{ '%.2f'|format(row.gross) }}</td>
-        <td>{{ '%.2f'|format(row.deductions) }}</td>
-        <td>{{ '%.2f'|format(row.net) }}</td>
-        <td>{{ '%.2f'|format(row.isr) }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5">No payroll files uploaded yet.</td></tr>
-      {% endfor %}
-    </table>
-  </div>
+<section class="layout-two-column">
+  <div class="column primary">
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Finance</h2>
+        <p class="section-meta">Income, expenses, and payroll summaries</p>
+      </div>
+      <div class="card stack">
+        <div class="card-heading">
+          <div>
+            <p class="overline">Budget</p>
+            <h2>Budget snapshot</h2>
+          </div>
+          <span class="pill {{ 'pill-positive' if budget_summary.effective_balance >= 0 else 'pill-negative' }}">
+            {{ 'Healthy' if budget_summary.effective_balance >= 0 else 'Attention' }}
+          </span>
+        </div>
+        <div class="kpi-grid">
+          <div class="metric">
+            <p class="label">Income</p>
+            <p class="value">${{ '%.2f'|format(budget_summary.total_income) }}</p>
+          </div>
+          <div class="metric">
+            <p class="label">Expenses</p>
+            <p class="value">${{ '%.2f'|format(budget_summary.total_expenses) }}</p>
+          </div>
+          <div class="metric">
+            <p class="label">Debts</p>
+            <p class="value">${{ '%.2f'|format(budget_summary.active_debts) }}</p>
+          </div>
+          <div class="metric">
+            <p class="label">Monthly CFDI Net</p>
+            <p class="value">${{ '%.2f'|format(budget_summary.monthly_cfdi_net) }}</p>
+          </div>
+          <div class="metric">
+            <p class="label">Effective Balance</p>
+            <p class="value {{ 'positive' if budget_summary.effective_balance >= 0 else 'negative' }}">
+              ${{ '%.2f'|format(budget_summary.effective_balance) }}
+            </p>
+          </div>
+        </div>
+      </div>
 
-  <div class="card wide">
-    <h2>Gym Routine</h2>
-    <div class="markdown" aria-label="gym-routine">
-      {{ routine_html|safe }}
+      <div class="card stack">
+        <div class="card-heading">
+          <div>
+            <p class="overline">Payroll</p>
+            <h2>Monthly CFDI Nómina</h2>
+          </div>
+          <span class="pill">{{ monthly|length }} months</span>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="numeric">Gross</th>
+                <th class="numeric">Deductions</th>
+                <th class="numeric">Net</th>
+                <th class="numeric">ISR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in monthly %}
+              <tr>
+                <td data-label="Period">{{ row.period }}</td>
+                <td class="numeric" data-label="Gross">{{ '%.2f'|format(row.gross) }}</td>
+                <td class="numeric" data-label="Deductions">{{ '%.2f'|format(row.deductions) }}</td>
+                <td class="numeric" data-label="Net">{{ '%.2f'|format(row.net) }}</td>
+                <td class="numeric" data-label="ISR">{{ '%.2f'|format(row.isr) }}</td>
+              </tr>
+              {% else %}
+              <tr class="empty-row">
+                <td colspan="5">No payroll files uploaded yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <div class="card-heading">
+          <div>
+            <p class="overline">Source data</p>
+            <h2>Recent CFDI files</h2>
+          </div>
+          <span class="pill">{{ entries|length }} files</span>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Fecha</th>
+                <th>Emisor</th>
+                <th>Receptor</th>
+                <th class="numeric">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in entries %}
+              <tr>
+                <td data-label="File">{{ entry.archivo }}</td>
+                <td data-label="Fecha">{{ entry.fecha or '—' }}</td>
+                <td data-label="Emisor">{{ entry.emisor }}</td>
+                <td data-label="Receptor">{{ entry.receptor }}</td>
+                <td class="numeric" data-label="Net">{{ '%.2f'|format(entry.neto) if entry.neto is defined else 'err' }}</td>
+              </tr>
+              {% else %}
+              <tr class="empty-row">
+                <td colspan="5">Upload XMLs via POST /upload-xml.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Fitness</h2>
+        <p class="section-meta">Recent workouts and routine guidance</p>
+      </div>
+      <div class="card stack">
+        <div class="card-heading">
+          <div>
+            <p class="overline">Training</p>
+            <h2>Gym routine</h2>
+          </div>
+          <span class="pill">All tracks</span>
+        </div>
+        <div class="markdown" aria-label="gym-routine">
+          {{ routine_html|safe }}
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="card wide">
-    <h2>Recent CFDI Files</h2>
-    <table class="mono">
-      <tr>
-        <th>File</th><th>Fecha</th><th>Emisor</th><th>Receptor</th><th>Net</th>
-      </tr>
-      {% for entry in entries %}
-      <tr>
-        <td>{{ entry.archivo }}</td>
-        <td>{{ entry.fecha or '—' }}</td>
-        <td>{{ entry.emisor }}</td>
-        <td>{{ entry.receptor }}</td>
-        <td>{{ '%.2f'|format(entry.neto) if entry.neto is defined else 'err' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5">Upload XMLs via POST /upload-xml</td></tr>
-      {% endfor %}
-    </table>
-  </div>
+  <aside class="column support">
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Reports</p>
+          <h2>Generate</h2>
+        </div>
+      </div>
+      <form id="report-form" class="form-grid">
+        <label class="field">
+          <span>Routine focus</span>
+          <select name="routine">
+            <option value="push">Push</option>
+            <option value="pull">Pull</option>
+            <option value="legs">Legs</option>
+            <option value="all" selected>All</option>
+          </select>
+        </label>
+        <button class="btn btn-primary" type="submit">Generate report</button>
+        <p class="helper" id="report-status">Ready to generate.</p>
+        {% if latest_report %}
+        <a class="text-link" href="{{ url_for('report_view', date_slug=latest_report) }}">Open latest ({{ latest_report }})</a>
+        {% else %}
+        <p class="muted small">No reports generated yet.</p>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Filters</p>
+          <h2>View controls</h2>
+        </div>
+      </div>
+      <div class="pill-group">
+        <span class="pill muted">Period: All</span>
+        <span class="pill muted">Environment: Local</span>
+        <span class="pill muted">Tags: CFDI</span>
+      </div>
+      <p class="helper">Filters are currently static; wire to datasets as needed.</p>
+    </div>
+
+    <div class="card stack highlight">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Alerts</p>
+          <h2>Operational status</h2>
+        </div>
+      </div>
+      <div class="inline-alert success">
+        <span class="dot"></span>
+        <div>
+          <strong>System nominal</strong>
+          <p class="muted">Data directories healthy; no pending actions.</p>
+        </div>
+      </div>
+      <p class="helper">Monitor upload and report jobs here.</p>
+    </div>
+
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Capture</p>
+          <h2>Quick entry</h2>
+        </div>
+      </div>
+      <form class="form-grid" action="{{ url_for('create_entry') }}" method="post">
+        <label class="field">
+          <span>Type</span>
+          <select name="type">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Date</span>
+          <input type="date" name="date" value="{{ today }}">
+        </label>
+        <label class="field">
+          <span>Category</span>
+          <input type="text" name="category" placeholder="groceries">
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <input type="text" name="description" placeholder="Coffee with friends">
+        </label>
+        <label class="field">
+          <span>Amount</span>
+          <input type="number" step="0.01" name="amount" placeholder="0.00">
+        </label>
+        <button class="btn btn-primary" type="submit">Save entry</button>
+        <p class="helper">Stores directly into the monthly ledger for Obsidian.</p>
+      </form>
+    </div>
+
+    <div class="card stack">
+      <div class="card-heading">
+        <div>
+          <p class="overline">Training</p>
+          <h2>Log workout</h2>
+        </div>
+      </div>
+      <form class="form-grid" action="{{ url_for('log_workout') }}" method="post">
+        <label class="field">
+          <span>Date</span>
+          <input type="date" name="date" value="{{ today }}">
+        </label>
+        <label class="field">
+          <span>Day</span>
+          <select name="day">
+            <option value="PUSH">Push</option>
+            <option value="PULL">Pull</option>
+            <option value="LEGS">Legs</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Sets</span>
+          <textarea name="sets" rows="4" placeholder="flat_bench_press|80|8|notes"></textarea>
+        </label>
+        <button class="btn btn-primary" type="submit">Save workout</button>
+        <p class="helper">One set per line, format: exercise|weight|reps|notes.</p>
+      </form>
+    </div>
+  </aside>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const reportForm = document.getElementById('report-form');
+  const reportStatus = document.getElementById('report-status');
+  const newReportBtn = document.getElementById('new-report-btn');
+
+  function setStatus(text, state = '') {
+    reportStatus.textContent = text;
+    reportStatus.className = `helper ${state}`;
+  }
+
+  async function triggerReport(routineValue) {
+    setStatus('Generating report...', 'muted');
+    try {
+      const response = await fetch('/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routine: routineValue })
+      });
+      if (!response.ok) throw new Error('Request failed');
+      const data = await response.json();
+      setStatus(`Report ready: ${data.date}`, 'success');
+    } catch (err) {
+      console.error(err);
+      setStatus('Report failed. Retry in a few seconds.', 'error');
+    }
+  }
+
+  if (reportForm) {
+    reportForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const routine = reportForm.elements['routine'].value || 'all';
+      triggerReport(routine);
+    });
+  }
+
+  if (newReportBtn) {
+    newReportBtn.addEventListener('click', () => {
+      const routine = reportForm ? reportForm.elements['routine'].value : 'all';
+      triggerReport(routine);
+    });
+  }
+</script>
 {% endblock %}
